@@ -225,18 +225,20 @@
       </div>
 
       <!-- 精確分佈 0~5 人 -->
-      <div class="pt-2">
-        <div class="flex justify-between items-center mb-3">
-          <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2">
-            <i class="fa-solid fa-chart-simple text-slate-500"></i> 同時亮彩人數精確分佈 (0 ~ 5 人)
-          </h3>
-          <span class="text-[11px] text-slate-400 font-mono">P = (100 + 得意率) / (550 + 得意率)</span>
-        </div>
+<div class="pt-2">
+  <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 mb-3">
+    <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2 whitespace-nowrap">
+      <i class="fa-solid fa-chart-simple text-slate-500"></i> 同時亮彩人數精確分佈 (0 ~ 5 人)
+    </h3>
+    <span class="text-[10px] sm:text-[11px] text-slate-400 font-mono">
+      P = (100 + 得意率) / (550 + 得意率)
+    </span>
+  </div>
 
-        <div class="space-y-2.5" id="prob-bars">
-          <!-- 0~5 人條狀列 -->
-        </div>
-      </div>
+  <div class="space-y-2.5" id="prob-bars">
+    <!-- 0~5 人條狀列 -->
+  </div>
+</div>
     </section>
 
   </div>
