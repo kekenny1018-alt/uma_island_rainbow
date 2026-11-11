@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>賽馬娘 亮彩爆發機率計算機</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      background-color: #f6f8fb;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .uma-card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid #edf2f7;
+    }
+    input[type=range] {
+      accent-color: #2563eb;
+    }
+    details summary::-webkit-details-marker {
+      display: none;
+    }
+  </style>
+</head>
+<body class="text-slate-800 p-4 md:p-8">
+  <div class="max-w-4xl mx-auto space-y-5">
+
+    <!-- 頂部標題 -->
+    <header class="text-center space-y-1.5">
+      <div class="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+        <i class="fa-solid fa-calculator"></i> 劇本爆發精算
+      </div>
+      <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+        賽馬娘無人島劇本同時亮彩機率計算機
+      </h1>
+      <p class="text-xs sm:text-sm text-slate-500">
+        精算 5 張卡同時亮彩機率，讓你可以發上網抱怨(沒有考慮海之家的+10)
+      </p>
+    </header>
+
+    <!-- 1. 支援卡設定（可折疊） -->
+    <details id="cards-details" class="uma-card group overflow-hidden" open>
+      <summary class="p-4 sm:p-5 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <i class="fa-solid fa-id-card text-blue-500"></i>
+          <span class="text-base font-bold text-slate-800">支援卡設定</span>
+          <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium" id="cards-summary-badge">5 張卡片就緒</span>
+        </div>
+        <div class="flex items-center">
+          <i class="fa-solid fa-chevron-down text-slate-400 text-sm transition-transform duration-200 group-open:rotate-180"></i>
+        </div>
+      </summary>
+
+      <div class="p-4 sm:p-5 space-y-3 bg-white">
+        <div class="space-y-2.5" id="cards-container">
+          <!-- 卡片列由 JS 生成 -->
+        </div>
+      </div>
+    </details>
+
+    <!-- 2. 狀態與設施加成區 -->
+    <section class="uma-card p-5 space-y-5">
+      <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+        <h2 class="text-base font-bold flex items-center gap-2 text-slate-800">
+          <i class="fa-solid fa-sliders text-blue-500"></i> 當前回合狀態加成
+        </h2>
+        <span class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-mono">
+          全域額外加成: <span id="total-extra-badge" class="font-bold text-blue-600">+0</span>
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- 友人外出事件 -->
+        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-slate-700">
+              <i class="fa-solid fa-car-side mr-1 text-emerald-500"></i> 上回合外出事件
+            </label>
+            <span class="text-[10px] text-slate-400"></span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+            <button type="button" class="outing-btn py-2 px-2 rounded-lg font-medium border text-center transition-all bg-white border-blue-500 text-blue-600 shadow-sm" data-val="0">
+              無外出<br><span class="text-[10px] text-slate-400">+0</span>
+            </button>
+            <button type="button" class="outing-btn py-2 px-2 rounded-lg font-medium border text-center transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-100" data-val="20">
+              第 1/2/4 次<br><span class="text-[10px] font-bold text-blue-500">+20</span>
+            </button>
+            <button type="button" class="outing-btn py-2 px-2 rounded-lg font-medium border text-center transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-100" data-val="30">
+              第 3 次<br><span class="text-[10px] font-bold text-amber-500">+30</span>
+            </button>
+            <button type="button" class="outing-btn py-2 px-2 rounded-lg font-medium border text-center transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-100" data-val="120">
+              第 5 次<br><span class="text-[10px] font-bold text-rose-500">+120</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 訓練踩中友人 & 島訓（互斥鎖定控制） -->
+        <div id="training-bonus-box" class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 flex flex-col justify-between transition-opacity duration-200">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-slate-700">
+              <i class="fa-solid fa-wand-magic-sparkles mr-1 text-purple-500"></i> 上回合訓練狀態
+            </label>
+            <span id="training-disabled-hint" class="text-[10px] text-amber-600 hidden font-medium">外出中，無法觸發</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <label id="label-friend-hit" class="flex items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-blue-300 transition-all select-none">
+              <input type="checkbox" id="check-friend-hit" class="rounded text-blue-600 focus:ring-0 w-4 h-4">
+              <div>
+                <div class="font-bold text-slate-700">觸發友人</div>
+                <div class="text-[11px] text-blue-600 font-semibold">+20 得意率</div>
+              </div>
+            </label>
+
+            <label id="label-island" class="flex items-center gap-2 bg-white p-2.5 rounded-lg border border-slate-200 cursor-pointer hover:border-blue-300 transition-all select-none">
+              <input type="checkbox" id="check-island" class="rounded text-blue-600 focus:ring-0 w-4 h-4">
+              <div>
+                <div class="font-bold text-slate-700">上回合為島訓</div>
+                <div class="text-[11px] text-indigo-600 font-semibold">+60 得意率</div>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 設施等級輸入 -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-slate-600">
+            <i class="fa-solid fa-dumbbell mr-1 text-amber-500"></i> 設施等級加成 (Lv3: +20 / Lv4: +50 / Lv5: +80)
+          </span>
+        </div>
+        <div class="grid grid-cols-5 gap-2 text-xs text-center font-medium">
+          <div class="p-2 rounded-xl bg-blue-50/70 border border-blue-200">
+            <span class="block text-blue-700 font-bold mb-1">速度</span>
+            <select id="fac-speed" class="w-full rounded border-slate-300 bg-white py-1 text-center font-bold text-slate-700 shadow-sm focus:outline-none">
+              <option value="0">Lv.0 (+0)</option>
+              <option value="1">Lv.1 (+0)</option>
+              <option value="2">Lv.2 (+0)</option>
+              <option value="3">Lv.3 (+20)</option>
+              <option value="4">Lv.4 (+50)</option>
+              <option value="5">Lv.5 (+80)</option>
+            </select>
+          </div>
+          <div class="p-2 rounded-xl bg-red-50/70 border border-red-200">
+            <span class="block text-red-700 font-bold mb-1">持久力</span>
+            <select id="fac-stamina" class="w-full rounded border-slate-300 bg-white py-1 text-center font-bold text-slate-700 shadow-sm focus:outline-none">
+              <option value="0">Lv.0 (+0)</option>
+              <option value="1">Lv.1 (+0)</option>
+              <option value="2">Lv.2 (+0)</option>
+              <option value="3">Lv.3 (+20)</option>
+              <option value="4">Lv.4 (+50)</option>
+              <option value="5">Lv.5 (+80)</option>
+            </select>
+          </div>
+          <div class="p-2 rounded-xl bg-amber-50/70 border border-amber-200">
+            <span class="block text-amber-700 font-bold mb-1">力量</span>
+            <select id="fac-power" class="w-full rounded border-slate-300 bg-white py-1 text-center font-bold text-slate-700 shadow-sm focus:outline-none">
+              <option value="0">Lv.0 (+0)</option>
+              <option value="1">Lv.1 (+0)</option>
+              <option value="2">Lv.2 (+0)</option>
+              <option value="3">Lv.3 (+20)</option>
+              <option value="4">Lv.4 (+50)</option>
+              <option value="5">Lv.5 (+80)</option>
+            </select>
+          </div>
+          <div class="p-2 rounded-xl bg-pink-50/70 border border-pink-200">
+            <span class="block text-pink-700 font-bold mb-1">根性</span>
+            <select id="fac-guts" class="w-full rounded border-slate-300 bg-white py-1 text-center font-bold text-slate-700 shadow-sm focus:outline-none">
+              <option value="0">Lv.0 (+0)</option>
+              <option value="1">Lv.1 (+0)</option>
+              <option value="2">Lv.2 (+0)</option>
+              <option value="3">Lv.3 (+20)</option>
+              <option value="4">Lv.4 (+50)</option>
+              <option value="5">Lv.5 (+80)</option>
+            </select>
+          </div>
+          <div class="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200">
+            <span class="block text-emerald-700 font-bold mb-1">智力</span>
+            <select id="fac-wisdom" class="w-full rounded border-slate-300 bg-white py-1 text-center font-bold text-slate-700 shadow-sm focus:outline-none">
+              <option value="0">Lv.0 (+0)</option>
+              <option value="1">Lv.1 (+0)</option>
+              <option value="2">Lv.2 (+0)</option>
+              <option value="3">Lv.3 (+20)</option>
+              <option value="4">Lv.4 (+50)</option>
+              <option value="5">Lv.5 (+80)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 結果展示（期望值與≥3人亮彩置於精確分佈上方） -->
+    <section class="uma-card p-5 space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- 亮彩期望值 -->
+        <div class="p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/80 rounded-2xl flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-chart-line"></i> 當前亮彩期望值
+            </div>
+            <div class="text-2xl sm:text-3xl font-black text-blue-900 mt-1" id="stat-ev">0.00 人</div>
+            <div class="text-[11px] text-blue-600/80 mt-0.5">平均出現在得意訓練之卡片數量</div>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-white/80 shadow-sm flex items-center justify-center text-blue-600 text-xl font-bold">
+            μ
+          </div>
+        </div>
+
+        <!-- 至少 3 人同時亮彩 -->
+        <div class="p-4 bg-gradient-to-br from-purple-50 to-indigo-100/50 border border-purple-200/80 rounded-2xl flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold text-purple-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-fire text-amber-500"></i> 至少 3 人同時亮彩 (≥3)
+            </div>
+            <div class="text-2xl sm:text-3xl font-black text-purple-900 mt-1" id="stat-ge3">0.00%</div>
+            <div class="text-[11px] text-purple-600/80 mt-0.5">大爆發回合發生機率</div>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-white/80 shadow-sm flex items-center justify-center text-purple-600 text-xl font-bold">
+            ≥3
+          </div>
+        </div>
+      </div>
+
+      <!-- 精確分佈 0~5 人 -->
+      <div class="pt-2">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2">
+            <i class="fa-solid fa-chart-simple text-slate-500"></i> 同時亮彩人數精確分佈 (0 ~ 5 人)
+          </h3>
+          <span class="text-[11px] text-slate-400 font-mono">P = (100 + 得意率) / (550 + 得意率)</span>
+        </div>
+
+        <div class="space-y-2.5" id="prob-bars">
+          <!-- 0~5 人條狀列 -->
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const state = {
+      outingBonus: 0,
+      friendHitBonus: false,
+      islandBonus: false,
+      facilities: {
+        speed: 0,
+        stamina: 0,
+        power: 0,
+        guts: 0,
+        wisdom: 0
+      },
+      cards: [
+        { type: 'speed', base: 65 },
+        { type: 'speed', base: 65 },
+        { type: 'power', base: 65 },
+        { type: 'wisdom', base: 65 },
+        { type: 'wisdom', base: 65 }
+      ]
+    };
+
+    function getFacilityBonus(lv) {
+      if (lv >= 5) return 80;
+      if (lv === 4) return 50;
+      if (lv === 3) return 20;
+      return 0;
+    }
+
+    function initCardsUI() {
+      const container = document.getElementById('cards-container');
+      container.innerHTML = '';
+
+      state.cards.forEach((card, idx) => {
+        const div = document.createElement('div');
+        div.className = 'p-3 bg-slate-50 rounded-xl border border-slate-200/70 flex flex-col sm:flex-row items-center gap-2.5';
+        div.innerHTML = `
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <span class="text-xs font-bold text-slate-400 w-5">#${idx + 1}</span>
+            <select class="card-type-select text-xs font-semibold px-2 py-1 rounded-lg border border-slate-300 bg-white" data-index="${idx}">
+              <option value="speed" ${card.type === 'speed' ? 'selected' : ''}>速度</option>
+              <option value="stamina" ${card.type === 'stamina' ? 'selected' : ''}>持久力</option>
+              <option value="power" ${card.type === 'power' ? 'selected' : ''}>力量</option>
+              <option value="guts" ${card.type === 'guts' ? 'selected' : ''}>根性</option>
+              <option value="wisdom" ${card.type === 'wisdom' ? 'selected' : ''}>智力</option>
+            </select>
+          </div>
+
+          <div class="flex-1 w-full flex items-center gap-2.5">
+            <span class="text-xs text-slate-500 font-medium whitespace-nowrap">得意率:</span>
+            <input type="range" min="0" max="150" step="1" value="${card.base}" class="card-slider flex-1 h-1.5 bg-slate-200 rounded-lg cursor-pointer" data-index="${idx}">
+            <input type="number" min="0" max="300" value="${card.base}" class="card-num w-14 text-center text-xs font-bold border border-slate-200 rounded-lg py-1 bg-white" data-index="${idx}">
+          </div>
+
+          <div class="w-full sm:w-44 text-right flex justify-between sm:justify-end items-center gap-2 text-xs">
+            <span class="text-slate-400 text-[11px]" id="card-formula-${idx}">實效: 65</span>
+            <span class="font-extrabold text-blue-600 font-mono text-sm" id="card-prob-${idx}">26.8%</span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      // 綁定卡片輸入監聽
+      container.querySelectorAll('.card-type-select').forEach(el => {
+        el.addEventListener('change', (e) => {
+          state.cards[e.target.dataset.index].type = e.target.value;
+          update();
+        });
+      });
+
+      container.querySelectorAll('.card-slider').forEach(el => {
+        el.addEventListener('input', (e) => {
+          const idx = e.target.dataset.index;
+          const val = parseInt(e.target.value, 10);
+          state.cards[idx].base = val;
+          container.querySelector(`.card-num[data-index="${idx}"]`).value = val;
+          update();
+        });
+      });
+
+      container.querySelectorAll('.card-num').forEach(el => {
+        el.addEventListener('input', (e) => {
+          const idx = e.target.dataset.index;
+          let val = parseInt(e.target.value, 10) || 0;
+          if (val < 0) val = 0;
+          state.cards[idx].base = val;
+          container.querySelector(`.card-slider[data-index="${idx}"]`).value = Math.min(val, 150);
+          update();
+        });
+      });
+    }
+
+    // 動態規劃 Poisson Binomial 計算
+    function calculatePoissonBinomial(probs) {
+      const n = probs.length;
+      let dp = new Array(n + 1).fill(0);
+      dp[0] = 1;
+
+      for (let i = 0; i < n; i++) {
+        const p = probs[i];
+        const next = new Array(n + 1).fill(0);
+        for (let k = 0; k <= i + 1; k++) {
+          const notChoose = dp[k] * (1 - p);
+          const choose = k > 0 ? dp[k - 1] * p : 0;
+          next[k] = notChoose + choose;
+        }
+        dp = next;
+      }
+      return dp;
+    }
+
+    // 處理外出與訓練互斥狀態
+    function syncMutualExclusion() {
+      const isOuting = state.outingBonus > 0;
+      const chkFriend = document.getElementById('check-friend-hit');
+      const chkIsland = document.getElementById('check-island');
+      const lblFriend = document.getElementById('label-friend-hit');
+      const lblIsland = document.getElementById('label-island');
+      const hint = document.getElementById('training-disabled-hint');
+
+      if (isOuting) {
+        chkFriend.checked = false;
+        chkIsland.checked = false;
+        chkFriend.disabled = true;
+        chkIsland.disabled = true;
+        state.friendHitBonus = false;
+        state.islandBonus = false;
+
+        lblFriend.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        lblIsland.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        hint.classList.remove('hidden');
+      } else {
+        chkFriend.disabled = false;
+        chkIsland.disabled = false;
+        lblFriend.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        lblIsland.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        hint.classList.add('hidden');
+      }
+    }
+
+    function update() {
+      syncMutualExclusion();
+
+      let generalBonus = state.outingBonus;
+      if (!state.outingBonus) {
+        if (state.friendHitBonus) generalBonus += 20;
+        if (state.islandBonus) generalBonus += 60;
+      }
+
+      document.getElementById('total-extra-badge').textContent = `+${generalBonus}`;
+
+      // 各卡實效計算
+      const probs = [];
+      state.cards.forEach((card, idx) => {
+        const facLv = state.facilities[card.type] || 0;
+        const facBonus = getFacilityBonus(facLv);
+        const effectiveRate = card.base + facBonus + generalBonus;
+        const prob = (100 + effectiveRate) / (550 + effectiveRate);
+        probs.push(prob);
+
+        const formulaEl = document.getElementById(`card-formula-${idx}`);
+        const probEl = document.getElementById(`card-prob-${idx}`);
+        if (formulaEl && probEl) {
+          formulaEl.textContent = `實效: ${effectiveRate} (+${facBonus + generalBonus})`;
+          probEl.textContent = `${(prob * 100).toFixed(1)}%`;
+        }
+      });
+
+      const dist = calculatePoissonBinomial(probs);
+
+      // 期望值與 ≥3 人機率
+      const ev = probs.reduce((a, b) => a + b, 0);
+      const ge3 = (dist.slice(3).reduce((a, b) => a + b, 0) * 100).toFixed(2);
+
+      document.getElementById('stat-ev').textContent = `${ev.toFixed(2)} 人`;
+      document.getElementById('stat-ge3').textContent = `${ge3}%`;
+
+      // 渲染 0~5 人機率長條圖（改以 100% 為上限）
+      const barContainer = document.getElementById('prob-bars');
+      barContainer.innerHTML = '';
+
+      for (let k = 0; k <= 5; k++) {
+        const p = dist[k];
+        const pPct = (p * 100).toFixed(2);
+        const widthPct = Math.min(Math.max(p * 100, 0), 100);
+
+        let barColor = 'bg-slate-300';
+        let textColor = 'text-slate-700';
+        if (k >= 3) {
+          barColor = 'bg-gradient-to-r from-purple-500 to-indigo-600';
+          textColor = 'text-purple-700 font-bold';
+        } else if (k === 2) {
+          barColor = 'bg-blue-500';
+          textColor = 'text-blue-700 font-bold';
+        }
+
+        const row = document.createElement('div');
+        row.className = 'space-y-1';
+        row.innerHTML = `
+          <div class="flex justify-between text-xs font-semibold">
+            <span class="flex items-center gap-1.5 ${textColor}">
+              <span class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] bg-slate-100">${k}</span>
+              同時 ${k} 人亮彩
+            </span>
+            <span class="font-mono ${textColor}">${pPct}%</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+            <div class="${barColor} h-full rounded-full transition-all duration-300" style="width: ${widthPct}%"></div>
+          </div>
+        `;
+        barContainer.appendChild(row);
+      }
+    }
+
+    // 外出按鈕點擊
+    document.querySelectorAll('.outing-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.outing-btn').forEach(b => {
+          b.className = 'outing-btn py-2 px-2 rounded-lg font-medium border text-center transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-100';
+        });
+        const target = e.currentTarget;
+        target.className = 'outing-btn py-2 px-2 rounded-lg font-medium border text-center transition-all bg-white border-blue-500 text-blue-600 shadow-sm';
+        state.outingBonus = parseInt(target.dataset.val, 10);
+        update();
+      });
+    });
+
+    document.getElementById('check-friend-hit').addEventListener('change', (e) => {
+      state.friendHitBonus = e.target.checked;
+      update();
+    });
+
+    document.getElementById('check-island').addEventListener('change', (e) => {
+      state.islandBonus = e.target.checked;
+      update();
+    });
+
+    // 設施等級選擇
+    ['speed', 'stamina', 'power', 'guts', 'wisdom'].forEach(type => {
+      document.getElementById(`fac-${type}`).addEventListener('change', (e) => {
+        state.facilities[type] = parseInt(e.target.value, 10);
+        update();
+      });
+    });
+
+    // 啟動
+    initCardsUI();
+    update();
+  </script>
+</body>
+</html>
