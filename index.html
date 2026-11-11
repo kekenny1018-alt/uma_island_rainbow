@@ -225,20 +225,20 @@
       </div>
 
       <!-- 精確分佈 0~5 人 -->
-<div class="pt-2">
-  <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 mb-3">
-    <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2 whitespace-nowrap">
-      <i class="fa-solid fa-chart-simple text-slate-500"></i> 同時亮彩人數精確分佈 (0 ~ 5 人)
-    </h3>
-    <span class="text-[10px] sm:text-[11px] text-slate-400 font-mono">
-      P = (100 + 得意率) / (550 + 得意率)
-    </span>
-  </div>
+      <div class="pt-2">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 mb-3">
+          <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2 whitespace-nowrap">
+            <i class="fa-solid fa-chart-simple text-slate-500"></i> 同時亮彩人數精確分佈 (0 ~ 5 人)
+          </h3>
+          <span class="text-[10px] sm:text-[11px] text-slate-400 font-mono">
+            P = (100 + 得意率) / (550 + 得意率)
+          </span>
+        </div>
 
-  <div class="space-y-2.5" id="prob-bars">
-    <!-- 0~5 人條狀列 -->
-  </div>
-</div>
+        <div class="space-y-2.5" id="prob-bars">
+          <!-- 0~5 人條狀列 -->
+        </div>
+      </div>
     </section>
 
   </div>
@@ -256,11 +256,11 @@
         wisdom: 0
       },
       cards: [
-        { type: 'speed', base: 65 },
-        { type: 'speed', base: 65 },
-        { type: 'power', base: 65 },
-        { type: 'wisdom', base: 65 },
-        { type: 'wisdom', base: 65 }
+        { type: 'speed', base: 65, withFriend: false },
+        { type: 'speed', base: 65, withFriend: false },
+        { type: 'power', base: 65, withFriend: false },
+        { type: 'wisdom', base: 65, withFriend: false },
+        { type: 'wisdom', base: 65, withFriend: false }
       ]
     };
 
@@ -294,6 +294,12 @@
             <span class="text-xs text-slate-500 font-medium whitespace-nowrap">得意率:</span>
             <input type="range" min="0" max="150" step="1" value="${card.base}" class="card-slider flex-1 h-1.5 bg-slate-200 rounded-lg cursor-pointer" data-index="${idx}">
             <input type="number" min="0" max="300" value="${card.base}" class="card-num w-14 text-center text-xs font-bold border border-slate-200 rounded-lg py-1 bg-white" data-index="${idx}">
+            
+            <!-- 上回合與友人同行訓練 (+60) -->
+            <label class="card-friend-label flex items-center gap-1 text-xs select-none bg-white px-2 py-1 rounded-lg border border-slate-200 cursor-pointer hover:border-blue-300 transition-all shrink-0" data-index="${idx}" title="上回合與友人一同訓練 (+60 得意率)">
+              <input type="checkbox" class="card-friend-checkbox rounded text-blue-600 focus:ring-0 w-3.5 h-3.5" data-index="${idx}" ${card.withFriend ? 'checked' : ''}>
+              <span class="text-slate-600 font-medium text-[11px] whitespace-nowrap">友人同行 <span class="text-blue-600 font-bold">+60</span></span>
+            </label>
           </div>
 
           <div class="w-full sm:w-44 text-right flex justify-between sm:justify-end items-center gap-2 text-xs">
@@ -332,6 +338,14 @@
           update();
         });
       });
+
+      container.querySelectorAll('.card-friend-checkbox').forEach(el => {
+        el.addEventListener('change', (e) => {
+          const idx = e.target.dataset.index;
+          state.cards[idx].withFriend = e.target.checked;
+          update();
+        });
+      });
     }
 
     // 動態規劃 Poisson Binomial 計算
@@ -353,15 +367,17 @@
       return dp;
     }
 
-    // 處理外出與訓練互斥狀態
+    // 處理外出、島訓與單卡友人同行勾選框的連動與鎖定
     function syncMutualExclusion() {
       const isOuting = state.outingBonus > 0;
+      const isIsland = state.islandBonus;
       const chkFriend = document.getElementById('check-friend-hit');
       const chkIsland = document.getElementById('check-island');
       const lblFriend = document.getElementById('label-friend-hit');
       const lblIsland = document.getElementById('label-island');
       const hint = document.getElementById('training-disabled-hint');
 
+      // 1. 上回合外出：停用訓練狀態
       if (isOuting) {
         chkFriend.checked = false;
         chkIsland.checked = false;
@@ -380,6 +396,22 @@
         lblIsland.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
         hint.classList.add('hidden');
       }
+
+      // 2. 當有「島訓」或「外出」時，禁止點選各卡的「友人同行 (+60)」
+      const disableCardFriend = isOuting || state.islandBonus;
+      document.querySelectorAll('.card-friend-checkbox').forEach(cb => {
+        const idx = cb.dataset.index;
+        const lbl = document.querySelector(`.card-friend-label[data-index="${idx}"]`);
+        if (disableCardFriend) {
+          cb.checked = false;
+          cb.disabled = true;
+          state.cards[idx].withFriend = false;
+          if (lbl) lbl.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        } else {
+          cb.disabled = false;
+          if (lbl) lbl.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        }
+      });
     }
 
     function update() {
@@ -398,14 +430,17 @@
       state.cards.forEach((card, idx) => {
         const facLv = state.facilities[card.type] || 0;
         const facBonus = getFacilityBonus(facLv);
-        const effectiveRate = card.base + facBonus + generalBonus;
+        // 單卡友人同行加成 (+60)
+        const cardFriendBonus = (!state.outingBonus && !state.islandBonus && card.withFriend) ? 60 : 0;
+        const totalBonus = facBonus + generalBonus + cardFriendBonus;
+        const effectiveRate = card.base + totalBonus;
         const prob = (100 + effectiveRate) / (550 + effectiveRate);
         probs.push(prob);
 
         const formulaEl = document.getElementById(`card-formula-${idx}`);
         const probEl = document.getElementById(`card-prob-${idx}`);
         if (formulaEl && probEl) {
-          formulaEl.textContent = `實效: ${effectiveRate} (+${facBonus + generalBonus})`;
+          formulaEl.textContent = `實效: ${effectiveRate} (+${totalBonus})`;
           probEl.textContent = `${(prob * 100).toFixed(1)}%`;
         }
       });
@@ -419,7 +454,7 @@
       document.getElementById('stat-ev').textContent = `${ev.toFixed(2)} 人`;
       document.getElementById('stat-ge3').textContent = `${ge3}%`;
 
-      // 渲染 0~5 人機率長條圖（改以 100% 為上限）
+      // 渲染 0~5 人機率長條圖（以 100% 為上限）
       const barContainer = document.getElementById('prob-bars');
       barContainer.innerHTML = '';
 
